@@ -41,6 +41,8 @@ def test_it_should_error_on_invalid_zbase32_strings() -> None:
     """
     with pytest.raises(zbase32.DecodeError):
         zbase32.decode("bar#")
+    with pytest.raises(zbase32.DecodeError):
+        zbase32.decode_rspamd("bar#")
 
 
 @hypothesis.given(value=hypothesis.strategies.binary())
@@ -49,3 +51,41 @@ def test_it_should_be_able_to_decode_encoded_values(value: bytes) -> None:
     it should be able to decode encoded values.
     """
     assert zbase32.decode(zbase32.encode(value)) == value
+
+
+@pytest.mark.parametrize(
+    ["decoded", "encoded"],
+    [
+        (b"test123", "wm3g84fg13cy"),
+        (b"TEST123", "wktgfkfg13cy"),
+        (b"hello", "em3ags7p"),
+        (b"HELLO", "ektarg7j"),
+        (b"!HELLO~", "bb1krgtjx19y"),
+        (b"~hello!", "6d4kgstpxmey"),
+        (b"\x00\x00\x00\x00\x00", "yyyyyyyy"),  # 0b00000
+        (b"!\x84\x10B\x08", "bbbbbbbb"),  # 0b00001
+        (b"B\x08!\x84\x10", "nnnnnnnn"),  # 0b00010
+        (b"\x84\x10B\x08!", "rrrrrrrr"),  # 0b00100
+        (b"\x08!\x84\x10B", "eeeeeeee"),  # 0b01000
+        (b"\x10B\x08!\x84", "oooooooo"),  # 0b10000
+        (b"\xB5\xD6Zk\xAD", "iiiiiiii"),  # 0b10101
+        (b"J)\xA5\x94R", "kkkkkkkk"),  # 0b01010
+        (b"\xFF\xFF\xFF\xFF\xFF", "99999999"),  # 0b11111
+    ],
+)
+def test_should_support_rspamd_encoding_and_decoding(
+    decoded: bytes, encoded: str
+) -> None:
+    """
+    it should support encoding and decoding conforming to rspamd variant.
+    """
+    assert zbase32.encode_rspamd(decoded) == encoded
+    assert zbase32.decode_rspamd(encoded) == decoded
+
+
+@hypothesis.given(value=hypothesis.strategies.binary())
+def test_it_should_be_able_to_decode_rspamd_encoded_values(value: bytes) -> None:
+    """
+    it should be able to decode values encoded according to rspamd variant.
+    """
+    assert zbase32.decode_rspamd(zbase32.encode_rspamd(value)) == value

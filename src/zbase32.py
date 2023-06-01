@@ -99,6 +99,78 @@ def encode(data: bytes) -> str:
     return bytes(result[:length]).decode()
 
 
+def decode_rspamd(string: str) -> bytes:
+    """
+    zbase32 decode conforming to rspamd variant.
+
+    :param string: a zbase32 encoded string
+
+    :return: decoded bytes
+
+    :raises DecodeError: invalid zbase32 encoded string
+    """
+    assert isinstance(string, str)
+
+    result = bytearray()
+
+    for chunk in _chunks(bytearray(string.encode()), 8):
+        buffer = bytearray(8)
+
+        for index, byte in enumerate(chunk):
+            value = _INVERSE_ALPHABET.get(byte, None)
+
+            if value is None:
+                raise DecodeError()
+
+            buffer[index] = value
+
+        result.append((buffer[0] | (buffer[1] << 5)) % 256)
+        result.append(
+            ((buffer[1] >> 3 & 0x03) | (buffer[2] << 2 & 252) | (buffer[3] << 7)) % 256
+        )
+        result.append(((buffer[3] >> 1 & 0x0F) | (buffer[4] << 4)) % 256)
+        result.append(
+            ((buffer[4] >> 4 & 0x01) | (buffer[5] << 1) | (buffer[6] << 6)) % 256
+        )
+        result.append(((buffer[6] >> 2) | buffer[7] << 3) % 256)
+
+    length = len(string) * 5 // 8
+
+    return bytes(result[:length])
+
+
+def encode_rspamd(data: bytes) -> str:
+    """
+    zbase32 encode conforming to rspamd variant.
+
+    :param data: bytes to encode
+
+    :return: a zbase32 encoded string
+    """
+    assert isinstance(data, bytes)
+
+    result = bytearray()
+
+    for chunk in _chunks(bytearray(data), 5):
+        buffer = bytearray(5)
+
+        for index, byte in enumerate(chunk):
+            buffer[index] = byte
+
+        result.append(_ALPHABET[(buffer[0] & 0x1F)])
+        result.append(_ALPHABET[((buffer[0] >> 5 | buffer[1] << 3) & 0x1F)])
+        result.append(_ALPHABET[((buffer[1] >> 2) & 0x1F)])
+        result.append(_ALPHABET[((buffer[1] >> 7 | buffer[2] << 1) & 0x1F)])
+        result.append(_ALPHABET[((buffer[2] >> 4 | buffer[3] << 4) & 0x1F)])
+        result.append(_ALPHABET[(buffer[3] >> 1 & 0x1F)])
+        result.append(_ALPHABET[((buffer[3] >> 6 | buffer[4] << 2) & 0x1F)])
+        result.append(_ALPHABET[(buffer[4] >> 3)])
+
+    length = math.ceil(len(data) * 8.0 / 5.0)
+
+    return bytes(result[:length]).decode()
+
+
 class DecodeError(RuntimeError):
     """
     zbase32 string cannot be decoded.
